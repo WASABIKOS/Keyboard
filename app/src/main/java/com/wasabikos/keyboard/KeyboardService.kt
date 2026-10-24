@@ -15,46 +15,27 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.LinearLayout
 import android.widget.Toast
 import java.util.Locale
 
 class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private var view: KeyboardView? = null
-    private var panel: AssistantPanel? = null
-    private val panelOpen get() = panel?.visibility == View.VISIBLE
     private var recognizer: SpeechRecognizer? = null
     private var lastShiftTap = 0L
 
-    override fun onCreateInputView(): View {
-        val kb = KeyboardView(this).also { it.listener = this; view = it }
-        val p = AssistantPanel(this) { closePanel() }.also { it.visibility = View.GONE; panel = it }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(p)
-            addView(kb)
-        }
-    }
+    override fun onCreateInputView(): View =
+        KeyboardView(this).also { it.listener = this; view = it }
 
-    private fun openPanel() {
-        val p = panel ?: return
-        p.applyTheme(KeyboardTheme.from(this))
-        p.visibility = View.VISIBLE
-        p.open()
-        view?.let { if (it.rows !== Layouts.letters) it.rows = Layouts.letters }
-    }
-
-    private fun closePanel() {
-        panel?.visibility = View.GONE
-        updateAutoCaps()
+    /** Abre la ventana flotante de AXON/Opencode encima de la app actual. */
+    private fun openPopup() {
+        startActivity(Intent(this, PopupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         val v = view ?: return
         v.theme = KeyboardTheme.from(this)
-        panel?.visibility = View.GONE
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         v.rows = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE)
             Layouts.symbols else Layouts.letters
@@ -72,7 +53,6 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         view?.theme = KeyboardTheme.from(this)
-        panel?.applyTheme(KeyboardTheme.from(this))
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -90,11 +70,6 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     override fun onText(text: String) {
         val v = view ?: return
-        if (panelOpen) {
-            panel?.type(text)
-            if (v.shift == KeyboardView.Shift.ON) v.shift = KeyboardView.Shift.OFF
-            return
-        }
         val ic = currentInputConnection ?: return
         ic.commitText(text, 1)
         if (v.shift == KeyboardView.Shift.ON) v.shift = KeyboardView.Shift.OFF
@@ -104,7 +79,6 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onKey(type: KeyType) {
         val ic = currentInputConnection ?: return
         val v = view ?: return
-        if (panelOpen && routeToPanel(type, v)) return
         when (type) {
             KeyType.DELETE -> {
                 val selected = ic.getSelectedText(0)
@@ -147,22 +121,9 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             KeyType.LETTERS -> { v.rows = Layouts.letters; updateAutoCaps() }
             KeyType.GLOBE -> switchKeyboard()
             KeyType.MIC -> toggleListening()
-            KeyType.PANEL -> openPanel()
+            KeyType.PANEL -> openPopup()
             KeyType.CHAR -> Unit
         }
-    }
-
-    /** Con el panel abierto, borrar/espacio/enter actúan sobre su borrador. */
-    private fun routeToPanel(type: KeyType, v: KeyboardView): Boolean {
-        val p = panel ?: return false
-        when (type) {
-            KeyType.DELETE -> p.delete()
-            KeyType.SPACE -> if (v.listening) stopListening() else p.type(" ")
-            KeyType.ENTER -> p.send()
-            KeyType.PANEL -> closePanel()
-            else -> return false
-        }
-        return true
     }
 
     private fun switchKeyboard() {
@@ -256,16 +217,13 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private val recognitionListener = object : RecognitionListener {
         override fun onPartialResults(partialResults: Bundle?) {
             val text = firstResult(partialResults) ?: return
-            if (panelOpen) return
             currentInputConnection?.setComposingText(format(text), 1)
         }
 
         override fun onResults(results: Bundle?) {
             val ic = currentInputConnection
             val text = firstResult(results)
-            if (panelOpen) {
-                text?.let { t -> panel?.let { p -> p.type((if (p.draft.isEmpty() || p.draft.endsWith(" ")) "" else " ") + t) } }
-            } else if (ic != null) {
+            if (ic != null) {
                 if (text != null) {
                     ic.setComposingText("", 1) // descarta el parcial antes de calcular el formato
                     ic.commitText(format(text), 1)

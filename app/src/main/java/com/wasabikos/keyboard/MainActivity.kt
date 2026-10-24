@@ -61,18 +61,13 @@ class MainActivity : Activity() {
             setPadding(0, (28 * dp).toInt(), 0, 0)
         })
         val fields = listOf(
-            Prefs.AXON_URL to "URL de Hermes (AXON)",
-            Prefs.AXON_KEY to "API key de Hermes (opcional)",
+            Prefs.AXON_URL to "URL de AXON",
             Prefs.OPENCODE_URL to "URL de Opencode",
-            Prefs.OPENCODE_PASS to "Contraseña de Opencode (opcional)",
         ).map { (key, label) ->
             key to EditText(this).apply {
                 hint = label
                 setText(Prefs.get(this@MainActivity, key))
                 isSingleLine = true
-                if (key == Prefs.AXON_KEY || key == Prefs.OPENCODE_PASS) {
-                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
                 root.addView(this, LinearLayout.LayoutParams(-1, -2))
             }
         }
