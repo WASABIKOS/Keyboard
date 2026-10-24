@@ -4,13 +4,12 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
@@ -22,84 +21,100 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Ventana flotante sobre la app actual con la web de AXON u Opencode.
- * Al cerrarla se manda al fondo (no se destruye) para conservar la sesión cargada.
+ * Ventana flotante con la web de Opencode, pegada encima del teclado.
+ * La ventana ocupa toda la pantalla pero es transparente: la tarjeta va abajo y sube con el teclado;
+ * tocar el área vacía la cierra. Al cerrar se manda al fondo para conservar la página cargada.
  */
 class PopupActivity : Activity() {
 
     private val dp by lazy { resources.displayMetrics.density }
-    private lateinit var webs: List<WebView>
-    private lateinit var tabs: List<TextView>
-    private var current = 1 // Opencode por defecto
+    private lateinit var web: WebView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val theme = KeyboardTheme.from(this)
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
+        )
 
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.55).toInt())
-        window.setGravity(Gravity.TOP)
-        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-        window.setDimAmount(0.4f)
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        web = newWebView(Prefs.get(this, Prefs.OPENCODE_URL))
+        val p = (8 * dp).toInt()
 
-        val urls = listOf(Prefs.get(this, Prefs.AXON_URL), Prefs.get(this, Prefs.OPENCODE_URL))
-        webs = urls.map { newWebView(it) }
-        tabs = listOf("AXON", "Opencode").map { label ->
-            TextView(this).apply {
-                text = label; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-                setPadding((14 * dp).toInt(), (6 * dp).toInt(), (14 * dp).toInt(), (6 * dp).toInt())
-            }
-        }
-
-        val header = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            val p = (8 * dp).toInt()
-            setPadding(p, p, p, p)
-            tabs.forEachIndexed { i, t ->
-                t.setOnClickListener { select(i) }
-                addView(t, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = p })
-            }
-            addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        val bar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            setPadding(p, p / 2, p, 0)
             addView(TextView(context).apply {
-                text = "⟳"; textSize = 20f; setTextColor(theme.hint); setPadding(p * 2, 0, p * 2, 0)
-                setOnClickListener { webs[current].reload() }
+                text = "⟳"; textSize = 18f; setTextColor(theme.hint); setPadding(p * 2, p / 2, p * 2, p / 2)
+                setOnClickListener { web.reload() }
             })
             addView(TextView(context).apply {
-                text = "✕"; textSize = 20f; setTextColor(theme.hint); setPadding(p * 2, 0, p, 0)
-                setOnClickListener { moveTaskToBack(true) }
+                text = "✕"; textSize = 18f; setTextColor(theme.hint); setPadding(p * 2, p / 2, p, p / 2)
+                setOnClickListener { close() }
             })
         }
-        val content = FrameLayout(this).apply { webs.forEach { addView(it, FrameLayout.LayoutParams(-1, -1)) } }
 
-        setContentView(LinearLayout(this).apply {
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(theme.background)
-            addView(header)
-            addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        })
-        select(current)
+            background = GradientDrawable().apply {
+                setColor(theme.background)
+                cornerRadii = floatArrayOf(16 * dp, 16 * dp, 16 * dp, 16 * dp, 0f, 0f, 0f, 0f)
+            }
+            clipToOutline = true
+            isClickable = true // que los toques en la tarjeta no la cierren
+            addView(bar)
+            addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        }
+
+        val root = FrameLayout(this).apply {
+            setOnClickListener { close() } // tocar fuera de la tarjeta
+            addView(card, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.45).toInt(), Gravity.BOTTOM))
+        }
+        // Android 15 dibuja de borde a borde: respetamos barra de estado, navegación y teclado a mano
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+                v.setPadding(0, bars.top, 0, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                v.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
+        setContentView(root)
     }
 
-    private fun select(i: Int) {
-        current = i
-        val theme = KeyboardTheme.from(this)
-        webs.forEachIndexed { j, w -> w.visibility = if (j == i) View.VISIBLE else View.GONE }
-        tabs.forEachIndexed { j, t ->
-            val on = j == i
-            t.setTextColor(if (on) theme.background else theme.hint)
-            t.background = GradientDrawable().apply { cornerRadius = 16 * dp; setColor(if (on) theme.text else Color.TRANSPARENT) }
-        }
+    override fun onResume() {
+        super.onResume()
+        focusPrompt()
+    }
+
+    private fun close() {
+        CookieManager.getInstance().flush()
+        moveTaskToBack(true)
+    }
+
+    /** Pone el foco en el cuadro de mensaje de Opencode para que el teclado siga abierto. */
+    private fun focusPrompt() {
+        web.requestFocus()
+        web.evaluateJavascript(
+            "(function(){var e=document.querySelector('textarea,[contenteditable=\"true\"],input[type=text]');" +
+                "if(e){e.focus();}})()", null
+        )
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun newWebView(url: String) = WebView(this).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.databaseEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         setBackgroundColor(KeyboardTheme.from(context).background)
-        webViewClient = WebViewClient()
+        webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                // La SPA tarda en montar el compositor
+                view.postDelayed({ focusPrompt() }, 800)
+            }
+        }
         webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 val mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -112,12 +127,6 @@ class PopupActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        val w = webs[current]
-        if (w.canGoBack()) w.goBack() else moveTaskToBack(true)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        CookieManager.getInstance().flush()
+        if (web.canGoBack()) web.goBack() else close()
     }
 }

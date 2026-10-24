@@ -27,7 +27,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onCreateInputView(): View =
         KeyboardView(this).also { it.listener = this; view = it }
 
-    /** Abre la ventana flotante de AXON/Opencode encima de la app actual. */
+    /** Abre la ventana flotante de Opencode encima de la app actual. */
     private fun openPopup() {
         startActivity(Intent(this, PopupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

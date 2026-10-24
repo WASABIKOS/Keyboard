@@ -3,11 +3,9 @@ package com.wasabikos.keyboard
 import android.content.Context
 
 object Prefs {
-    const val AXON_URL = "axon_url"
     const val OPENCODE_URL = "opencode_url"
 
     private val defaults = mapOf(
-        AXON_URL to "https://aura.taild7e6a0.ts.net/hermes/",
         OPENCODE_URL to "https://aura.taild7e6a0.ts.net:10000/",
     )
 

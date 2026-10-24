@@ -255,7 +255,7 @@ class KeyboardView(context: Context) : View(context) {
                 }
                 invalidate()
             }
-            // Deslizar hacia arriba desde la barra espaciadora abre la ventana de AXON/Opencode
+            // Deslizar hacia arriba desde la barra espaciadora abre la ventana de Opencode
             MotionEvent.ACTION_MOVE -> if (pressed?.type == KeyType.SPACE && !consumed) {
                 if (downY - event.y > 40 * dp) {
                     consumed = true

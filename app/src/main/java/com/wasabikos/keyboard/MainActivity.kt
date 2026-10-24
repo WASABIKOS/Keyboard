@@ -56,12 +56,11 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
         }
         root.addView(TextView(this).apply {
-            text = "Asistentes (desliza hacia arriba desde el espacio)"
+            text = "Opencode (desliza hacia arriba desde el espacio)"
             textSize = 18f
             setPadding(0, (28 * dp).toInt(), 0, 0)
         })
         val fields = listOf(
-            Prefs.AXON_URL to "URL de AXON",
             Prefs.OPENCODE_URL to "URL de Opencode",
         ).map { (key, label) ->
             key to EditText(this).apply {
@@ -71,7 +70,7 @@ class MainActivity : Activity() {
                 root.addView(this, LinearLayout.LayoutParams(-1, -2))
             }
         }
-        button("Guardar asistentes") {
+        button("Guardar") {
             fields.forEach { (key, field) -> Prefs.set(this, key, field.text.toString()) }
             android.widget.Toast.makeText(this, "Guardado", android.widget.Toast.LENGTH_SHORT).show()
         }
