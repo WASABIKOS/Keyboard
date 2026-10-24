@@ -62,6 +62,13 @@ class KeyboardView(context: Context) : View(context) {
 
     private val handler = Handler(Looper.getMainLooper())
     private val longPress = Runnable { showPopup() }
+    private var consumed = false
+    // Mantener pulsada la barra espaciadora inicia el dictado
+    private val longPressSpace = Runnable {
+        consumed = true
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        listener?.onKey(KeyType.MIC)
+    }
     private val repeatDelete = object : Runnable {
         override fun run() {
             listener?.onKey(KeyType.DELETE)
@@ -101,8 +108,7 @@ class KeyboardView(context: Context) : View(context) {
         for ((key, r) in bounds) {
             // Estilo AMOLED plano: sin fondo de tecla salvo al pulsar o dictando
             val bg = when {
-                key === pressed -> theme.keyPressed
-                key.type == KeyType.MIC && listening -> theme.accent
+                key === pressed && key.type != KeyType.CHAR -> theme.keyPressed
                 else -> null
             }
             bg?.let { fill.color = it; canvas.drawRoundRect(r, radius, radius, fill) }
@@ -198,9 +204,9 @@ class KeyboardView(context: Context) : View(context) {
         popupKeys.forEachIndexed { i, s ->
             val cell = RectF(pr.left + i * cellW, pr.top, pr.left + (i + 1) * cellW, pr.bottom)
             if (i == popupIndex) {
-                fill.color = theme.accent
+                fill.color = theme.keyPressed
                 canvas.drawRoundRect(cell, radius, radius, fill)
-                textPaint.color = theme.onAccent
+                textPaint.color = theme.text
             } else textPaint.color = theme.text
             drawText(canvas, applyShift(s), cell, 22)
         }
@@ -240,6 +246,8 @@ class KeyboardView(context: Context) : View(context) {
                 if (key.type == KeyType.DELETE) {
                     listener?.onKey(KeyType.DELETE)
                     handler.postDelayed(repeatDelete, 400)
+                } else if (key.type == KeyType.SPACE) {
+                    handler.postDelayed(longPressSpace, 400)
                 } else if (key.popup.isNotEmpty()) {
                     handler.postDelayed(longPress, 350)
                 }
@@ -254,7 +262,7 @@ class KeyboardView(context: Context) : View(context) {
                 val key = pressed
                 if (popupRect != null && popupIndex >= 0) {
                     listener?.onText(applyShift(popupKeys[popupIndex]))
-                } else if (key != null && key.type != KeyType.DELETE) {
+                } else if (key != null && key.type != KeyType.DELETE && !consumed) {
                     if (key.type == KeyType.CHAR) listener?.onText(displayLabel(key))
                     else listener?.onKey(key.type)
                 }
@@ -268,6 +276,8 @@ class KeyboardView(context: Context) : View(context) {
     private fun reset() {
         handler.removeCallbacks(longPress)
         handler.removeCallbacks(repeatDelete)
+        handler.removeCallbacks(longPressSpace)
+        consumed = false
         pressed = null; pressedRect = null
         popupRect = null; popupKeys = emptyList(); popupIndex = -1
         invalidate()

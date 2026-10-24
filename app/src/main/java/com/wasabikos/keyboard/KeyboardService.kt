@@ -90,7 +90,9 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                 }
                 updateAutoCaps()
             }
-            KeyType.SPACE -> { ic.commitText(" ", 1); updateAutoCaps() }
+            KeyType.SPACE -> {
+                if (v.listening) stopListening() else { ic.commitText(" ", 1); updateAutoCaps() }
+            }
             KeyType.ENTER -> {
                 val info = currentInputEditorInfo
                 val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
@@ -150,24 +152,40 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                 .putExtra(MainActivity.EXTRA_REQUEST_MIC, true))
             return
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Toast.makeText(this, "Reconocimiento de voz no disponible en este dispositivo", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val sr = recognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
+        val sr = recognizer ?: createRecognizer()?.also {
             it.setRecognitionListener(recognitionListener)
             recognizer = it
+        } ?: run {
+            Toast.makeText(this, "No hay servicio de voz (STT). Instala o activa Google Speech Services", Toast.LENGTH_LONG).show()
+            return
         }
+        val lang = spanishTag()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
         sr.startListening(intent)
         view?.listening = true
         view?.spaceLabel = "Escuchando…"
+    }
+
+    /** Detecta el motor STT: el del sistema y, si no hay, el reconocedor local (Android 12+). */
+    private fun createRecognizer(): SpeechRecognizer? = when {
+        SpeechRecognizer.isRecognitionAvailable(this) -> SpeechRecognizer.createSpeechRecognizer(this)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this) ->
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+        else -> null
+    }
+
+    /** Español siempre: usa la variante regional del sistema si es español, si no es-US (latinoamericano). */
+    private fun spanishTag(): String {
+        val l = Locale.getDefault()
+        return if (l.language == "es" && l.country.isNotEmpty()) l.toLanguageTag() else "es-US"
     }
 
     private fun stopListening() {

@@ -17,9 +17,7 @@ object Layouts {
     private fun bottomRow(switchKey: Key) = listOf(
         switchKey,
         Key(",", popup = listOf("…", ";", ":")),
-        Key("", KeyType.GLOBE),
-        Key("", KeyType.MIC),
-        Key("", KeyType.SPACE, weight = 3f),
+        Key("", KeyType.SPACE, weight = 5f),
         Key(".", popup = listOf("!?", "!", "?", "¡", "¿")),
         Key("", KeyType.ENTER, weight = 1.5f),
     )
