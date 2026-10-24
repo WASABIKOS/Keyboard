@@ -27,11 +27,28 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private var recognizer: SpeechRecognizer? = null
     private var lastShiftTap = 0L
 
-    override fun onCreateInputView(): View =
-        KeyboardView(this).also {
-            it.listener = this
-                        view = it
+    override fun onCreateInputView(): View {
+        val kb = KeyboardView(this).also { it.listener = this; view = it }
+        val p = AssistantPanel(this) { closePanel() }.also { it.visibility = View.GONE; panel = it }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(p)
+            addView(kb)
         }
+    }
+
+    private fun openPanel() {
+        val p = panel ?: return
+        p.applyTheme(KeyboardTheme.from(this))
+        p.visibility = View.VISIBLE
+        p.open()
+        view?.let { if (it.rows !== Layouts.letters) it.rows = Layouts.letters }
+    }
+
+    private fun closePanel() {
+        panel?.visibility = View.GONE
+        updateAutoCaps()
+    }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)

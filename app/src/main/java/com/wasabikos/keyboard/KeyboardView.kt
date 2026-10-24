@@ -123,6 +123,7 @@ class KeyboardView(context: Context) : View(context) {
                 KeyType.ENTER -> drawEnter(canvas, r)
                 KeyType.GLOBE -> drawGlobe(canvas, r)
                 KeyType.MIC -> drawMic(canvas, r)
+                KeyType.PANEL -> Unit
                 KeyType.SPACE -> {
                     textPaint.color = theme.hint
                     drawText(canvas, spaceLabel, r, 13)
