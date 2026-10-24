@@ -27,8 +27,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onCreateInputView(): View =
         KeyboardView(this).also {
             it.listener = this
-            it.spaceLabel = getString(R.string.app_name)
-            view = it
+                        view = it
         }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
@@ -179,7 +178,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private fun onListeningEnded() {
         view?.listening = false
-        view?.spaceLabel = getString(R.string.app_name)
+        view?.spaceLabel = ""
     }
 
     private fun firstResult(bundle: Bundle?): String? =

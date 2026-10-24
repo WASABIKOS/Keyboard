@@ -24,11 +24,11 @@ data class KeyboardTheme(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 fun c(id: Int) = context.getColor(id)
                 return if (night) KeyboardTheme(
-                    background = c(android.R.color.system_neutral1_900),
+                    background = Color.BLACK,
                     key = c(android.R.color.system_neutral1_800),
                     keySpecial = c(android.R.color.system_neutral2_700),
                     keyPressed = c(android.R.color.system_accent1_700),
-                    text = c(android.R.color.system_neutral1_50),
+                    text = Color.WHITE,
                     hint = c(android.R.color.system_neutral2_300),
                     accent = c(android.R.color.system_accent1_200),
                     onAccent = c(android.R.color.system_accent1_800),

@@ -19,7 +19,7 @@ object Layouts {
         Key(",", popup = listOf("…", ";", ":")),
         Key("", KeyType.GLOBE),
         Key("", KeyType.MIC),
-        Key("", KeyType.SPACE, weight = 3.5f),
+        Key("", KeyType.SPACE, weight = 3f),
         Key(".", popup = listOf("!?", "!", "?", "¡", "¿")),
         Key("", KeyType.ENTER, weight = 1.5f),
     )

@@ -99,27 +99,21 @@ class KeyboardView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(theme.background)
         for ((key, r) in bounds) {
-            val special = key.type != KeyType.CHAR && key.type != KeyType.SPACE
-            fill.color = when {
+            // Estilo AMOLED plano: sin fondo de tecla salvo al pulsar o dictando
+            val bg = when {
                 key === pressed -> theme.keyPressed
-                key.type == KeyType.ENTER -> theme.accent
                 key.type == KeyType.MIC && listening -> theme.accent
-                special -> theme.keySpecial
-                else -> theme.key
+                else -> null
             }
-            canvas.drawRoundRect(r, radius, radius, fill)
+            bg?.let { fill.color = it; canvas.drawRoundRect(r, radius, radius, fill) }
 
-            val fg = when {
-                key.type == KeyType.ENTER -> theme.onAccent
-                key.type == KeyType.MIC && listening -> theme.onAccent
-                else -> theme.text
-            }
+            val fg = if (key.type == KeyType.MIC && listening) theme.onAccent else theme.text
             textPaint.color = fg
             stroke.color = fg
             when (key.type) {
                 KeyType.SHIFT -> drawShift(canvas, r)
                 KeyType.DELETE -> drawDelete(canvas, r)
-                KeyType.ENTER -> enterLabel?.let { drawText(canvas, it, r, 14) } ?: drawEnter(canvas, r)
+                KeyType.ENTER -> drawEnter(canvas, r)
                 KeyType.GLOBE -> drawGlobe(canvas, r)
                 KeyType.MIC -> drawMic(canvas, r)
                 KeyType.SPACE -> {
@@ -154,6 +148,7 @@ class KeyboardView(context: Context) : View(context) {
             lineTo(cx + s, cy); close()
         }
         if (shift == Shift.OFF) {
+            stroke.color = theme.hint
             canvas.drawPath(p, stroke)
         } else {
             fill.color = if (shift == Shift.LOCKED) theme.accent else stroke.color
@@ -163,11 +158,11 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun drawDelete(canvas: Canvas, r: RectF) {
-        val cx = r.centerX(); val cy = r.centerY(); val s = 9 * dp
+        val cx = r.centerX(); val cy = r.centerY(); val s = 10 * dp
         canvas.drawLine(cx - s, cy - s, cx - s, cy + s, stroke)
-        canvas.drawLine(cx - s / 2, cy, cx + s, cy, stroke)
-        canvas.drawLine(cx - s / 2, cy, cx, cy - s / 2, stroke)
-        canvas.drawLine(cx - s / 2, cy, cx, cy + s / 2, stroke)
+        canvas.drawLine(cx - s / 2, cy, cx + 1.3f * s, cy, stroke)
+        canvas.drawLine(cx - s / 2, cy, cx + s / 6, cy - 2 * s / 3, stroke)
+        canvas.drawLine(cx - s / 2, cy, cx + s / 6, cy + 2 * s / 3, stroke)
     }
 
     private fun drawEnter(canvas: Canvas, r: RectF) {
