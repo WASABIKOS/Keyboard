@@ -56,6 +56,7 @@ class KeyboardView(context: Context) : View(context) {
 
     private var pressed: Key? = null
     private var pressedRect: RectF? = null
+    private var downY = 0f
     private var popupKeys: List<String> = emptyList()
     private var popupRect: RectF? = null
     private var popupIndex = -1
@@ -241,7 +242,7 @@ class KeyboardView(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val (key, rect) = keyAt(event.x, event.y) ?: return true
-                pressed = key; pressedRect = rect
+                pressed = key; pressedRect = rect; downY = event.y
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 if (key.type == KeyType.DELETE) {
                     listener?.onKey(KeyType.DELETE)
@@ -253,7 +254,15 @@ class KeyboardView(context: Context) : View(context) {
                 }
                 invalidate()
             }
-            MotionEvent.ACTION_MOVE -> popupRect?.let { pr ->
+            // Deslizar hacia arriba desde la barra espaciadora abre el panel de asistentes
+            MotionEvent.ACTION_MOVE -> if (pressed?.type == KeyType.SPACE && !consumed) {
+                if (downY - event.y > 40 * dp) {
+                    consumed = true
+                    handler.removeCallbacks(longPressSpace)
+                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    listener?.onKey(KeyType.PANEL)
+                }
+            } else popupRect?.let { pr ->
                 val idx = ((event.x - pr.left) / (pr.width() / popupKeys.size)).toInt()
                     .coerceIn(0, popupKeys.size - 1)
                 if (idx != popupIndex) { popupIndex = idx; invalidate() }

@@ -15,12 +15,15 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.LinearLayout
 import android.widget.Toast
 import java.util.Locale
 
 class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private var view: KeyboardView? = null
+    private var panel: AssistantPanel? = null
+    private val panelOpen get() = panel?.visibility == View.VISIBLE
     private var recognizer: SpeechRecognizer? = null
     private var lastShiftTap = 0L
 
@@ -34,6 +37,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         super.onStartInputView(info, restarting)
         val v = view ?: return
         v.theme = KeyboardTheme.from(this)
+        panel?.visibility = View.GONE
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         v.rows = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE)
             Layouts.symbols else Layouts.letters
@@ -51,6 +55,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         view?.theme = KeyboardTheme.from(this)
+        panel?.applyTheme(KeyboardTheme.from(this))
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -67,9 +72,14 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     // --- Entrada de teclas ---
 
     override fun onText(text: String) {
+        val v = view ?: return
+        if (panelOpen) {
+            panel?.type(text)
+            if (v.shift == KeyboardView.Shift.ON) v.shift = KeyboardView.Shift.OFF
+            return
+        }
         val ic = currentInputConnection ?: return
         ic.commitText(text, 1)
-        val v = view ?: return
         if (v.shift == KeyboardView.Shift.ON) v.shift = KeyboardView.Shift.OFF
         if (text == "." || text == "?" || text == "!") updateAutoCaps()
     }
@@ -77,6 +87,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onKey(type: KeyType) {
         val ic = currentInputConnection ?: return
         val v = view ?: return
+        if (panelOpen && routeToPanel(type, v)) return
         when (type) {
             KeyType.DELETE -> {
                 val selected = ic.getSelectedText(0)
@@ -119,8 +130,22 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             KeyType.LETTERS -> { v.rows = Layouts.letters; updateAutoCaps() }
             KeyType.GLOBE -> switchKeyboard()
             KeyType.MIC -> toggleListening()
+            KeyType.PANEL -> openPanel()
             KeyType.CHAR -> Unit
         }
+    }
+
+    /** Con el panel abierto, borrar/espacio/enter actúan sobre su borrador. */
+    private fun routeToPanel(type: KeyType, v: KeyboardView): Boolean {
+        val p = panel ?: return false
+        when (type) {
+            KeyType.DELETE -> p.delete()
+            KeyType.SPACE -> if (v.listening) stopListening() else p.type(" ")
+            KeyType.ENTER -> p.send()
+            KeyType.PANEL -> closePanel()
+            else -> return false
+        }
+        return true
     }
 
     private fun switchKeyboard() {
@@ -214,13 +239,16 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private val recognitionListener = object : RecognitionListener {
         override fun onPartialResults(partialResults: Bundle?) {
             val text = firstResult(partialResults) ?: return
+            if (panelOpen) return
             currentInputConnection?.setComposingText(format(text), 1)
         }
 
         override fun onResults(results: Bundle?) {
             val ic = currentInputConnection
             val text = firstResult(results)
-            if (ic != null) {
+            if (panelOpen) {
+                text?.let { t -> panel?.let { p -> p.type((if (p.draft.isEmpty() || p.draft.endsWith(" ")) "" else " ") + t) } }
+            } else if (ic != null) {
                 if (text != null) {
                     ic.setComposingText("", 1) // descarta el parcial antes de calcular el formato
                     ic.commitText(format(text), 1)

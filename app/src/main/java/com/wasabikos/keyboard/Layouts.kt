@@ -1,6 +1,6 @@
 package com.wasabikos.keyboard
 
-enum class KeyType { CHAR, SHIFT, DELETE, ENTER, SPACE, SYMBOLS, LETTERS, GLOBE, MIC, MORE_SYMBOLS }
+enum class KeyType { CHAR, SHIFT, DELETE, ENTER, SPACE, SYMBOLS, LETTERS, GLOBE, MIC, MORE_SYMBOLS, PANEL }
 
 data class Key(
     val label: String,
