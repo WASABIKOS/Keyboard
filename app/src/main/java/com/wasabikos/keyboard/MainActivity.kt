@@ -55,25 +55,6 @@ class MainActivity : Activity() {
         micButton = button("3. Permitir micrófono") {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
         }
-        root.addView(TextView(this).apply {
-            text = "Opencode (desliza hacia arriba desde el espacio)"
-            textSize = 18f
-            setPadding(0, (28 * dp).toInt(), 0, 0)
-        })
-        val fields = listOf(
-            Prefs.OPENCODE_URL to "URL de Opencode",
-        ).map { (key, label) ->
-            key to EditText(this).apply {
-                hint = label
-                setText(Prefs.get(this@MainActivity, key))
-                isSingleLine = true
-                root.addView(this, LinearLayout.LayoutParams(-1, -2))
-            }
-        }
-        button("Guardar") {
-            fields.forEach { (key, field) -> Prefs.set(this, key, field.text.toString()) }
-            android.widget.Toast.makeText(this, "Guardado", android.widget.Toast.LENGTH_SHORT).show()
-        }
         root.addView(EditText(this).apply { hint = "Prueba el teclado aquí" },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = (24 * dp).toInt() })
         setContentView(ScrollView(this).apply { addView(root) })

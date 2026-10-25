@@ -15,6 +15,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import android.widget.Toast
 import java.util.Locale
 
@@ -24,18 +25,35 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private var recognizer: SpeechRecognizer? = null
     private var lastShiftTap = 0L
 
-    override fun onCreateInputView(): View =
-        KeyboardView(this).also { it.listener = this; view = it }
+    private var emoji: EmojiView? = null
 
-    /** Abre la ventana flotante de Opencode encima de la app actual. */
-    private fun openPopup() {
-        startActivity(Intent(this, PopupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun onCreateInputView(): View {
+        val kb = KeyboardView(this).also { it.listener = this; view = it }
+        val em = EmojiView(this, emojiListener).also { it.visibility = View.GONE; emoji = it }
+        // El teclado (INVISIBLE, no GONE) fija la altura; los emojis lo cubren con la misma altura
+        return FrameLayout(this).apply {
+            addView(kb)
+            addView(em, FrameLayout.LayoutParams(-1, -1))
+        }
+    }
+
+    private fun showEmoji(show: Boolean) {
+        emoji?.visibility = if (show) View.VISIBLE else View.GONE
+        view?.visibility = if (show) View.INVISIBLE else View.VISIBLE
+        if (show) emoji?.applyTheme(KeyboardTheme.from(this)) else updateAutoCaps()
+    }
+
+    private val emojiListener = object : EmojiView.Listener {
+        override fun onEmoji(emoji: String) { currentInputConnection?.commitText(emoji, 1) }
+        override fun onEmojiDelete() = onKey(KeyType.DELETE)
+        override fun onEmojiClose() = showEmoji(false)
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         val v = view ?: return
         v.theme = KeyboardTheme.from(this)
+        showEmoji(false)
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         v.rows = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE)
             Layouts.symbols else Layouts.letters
@@ -121,7 +139,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             KeyType.LETTERS -> { v.rows = Layouts.letters; updateAutoCaps() }
             KeyType.GLOBE -> switchKeyboard()
             KeyType.MIC -> toggleListening()
-            KeyType.PANEL -> openPopup()
+            KeyType.EMOJI -> showEmoji(true)
             KeyType.CHAR -> Unit
         }
     }

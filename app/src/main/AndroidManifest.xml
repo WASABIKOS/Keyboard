@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -25,16 +24,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".PopupActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:taskAffinity="com.wasabikos.keyboard.popup"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-            android:windowSoftInputMode="adjustResize"
-            android:theme="@style/PopupTheme" />
 
         <service
             android:name=".KeyboardService"

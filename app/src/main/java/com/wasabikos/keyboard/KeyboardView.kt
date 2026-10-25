@@ -123,7 +123,7 @@ class KeyboardView(context: Context) : View(context) {
                 KeyType.ENTER -> drawEnter(canvas, r)
                 KeyType.GLOBE -> drawGlobe(canvas, r)
                 KeyType.MIC -> drawMic(canvas, r)
-                KeyType.PANEL -> Unit
+                KeyType.EMOJI -> Unit
                 KeyType.SPACE -> {
                     textPaint.color = theme.hint
                     drawText(canvas, spaceLabel, r, 13)
@@ -255,13 +255,13 @@ class KeyboardView(context: Context) : View(context) {
                 }
                 invalidate()
             }
-            // Deslizar hacia arriba desde la barra espaciadora abre la ventana de Opencode
+            // Deslizar hacia arriba desde la barra espaciadora abre los emojis
             MotionEvent.ACTION_MOVE -> if (pressed?.type == KeyType.SPACE && !consumed) {
                 if (downY - event.y > 40 * dp) {
                     consumed = true
                     handler.removeCallbacks(longPressSpace)
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    listener?.onKey(KeyType.PANEL)
+                    listener?.onKey(KeyType.EMOJI)
                 }
             } else popupRect?.let { pr ->
                 val idx = ((event.x - pr.left) / (pr.width() / popupKeys.size)).toInt()
