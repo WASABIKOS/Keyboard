@@ -102,10 +102,13 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                 val selected = ic.getSelectedText(0)
                 if (!selected.isNullOrEmpty()) ic.commitText("", 1)
                 else {
-                    // Borra un code point completo (emojis/pares sustitutos)
-                    val before = ic.getTextBeforeCursor(2, 0)
-                    val n = if (before != null && before.length == 2 &&
-                        Character.isSurrogatePair(before[0], before[1])) 2 else 1
+                    // Borra un carácter visible completo (emojis compuestos, banderas)
+                    val before = ic.getTextBeforeCursor(16, 0)?.toString().orEmpty()
+                    val n = if (before.isEmpty()) 1 else {
+                        val it = java.text.BreakIterator.getCharacterInstance()
+                        it.setText(before)
+                        before.length - it.preceding(before.length).coerceAtLeast(0)
+                    }
                     ic.deleteSurroundingText(n, 0)
                 }
                 updateAutoCaps()

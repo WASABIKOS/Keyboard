@@ -39,10 +39,20 @@ class EmojiView(context: Context, private val listener: Listener) : LinearLayout
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
             ((convertView as? TextView) ?: TextView(context).apply {
-                textSize = 26f
+                textSize = 24f
                 gravity = Gravity.CENTER
-                layoutParams = ViewGroup.LayoutParams(-1, (46 * dp).toInt())
+                layoutParams = ViewGroup.LayoutParams(-1, (44 * dp).toInt())
             }).apply { text = items[position] }
+    }
+
+    private val catIcons = listOf(
+        EmojiIcon.Kind.RECENT, EmojiIcon.Kind.SMILEY, EmojiIcon.Kind.ANIMAL, EmojiIcon.Kind.FOOD,
+        EmojiIcon.Kind.ACTIVITY, EmojiIcon.Kind.TRAVEL, EmojiIcon.Kind.OBJECT, EmojiIcon.Kind.SYMBOL, EmojiIcon.Kind.FLAG,
+    )
+    private val closeIcon = EmojiIcon(context, EmojiIcon.Kind.CLOSE)
+    private val deleteIcon = EmojiIcon(context, EmojiIcon.Kind.DELETE)
+    private val deleteRepeat = object : Runnable {
+        override fun run() { listener.onEmojiDelete(); postDelayed(this, 50) }
     }
 
     init {
@@ -54,48 +64,41 @@ class EmojiView(context: Context, private val listener: Listener) : LinearLayout
             addRecent(e)
             listener.onEmoji(e)
         }
-        Emojis.categories.forEachIndexed { i, (icon, _) ->
-            tabs.addView(TextView(context).apply {
-                text = icon; textSize = 18f; gravity = Gravity.CENTER
-                setOnClickListener { select(i) }
-            }, LayoutParams(0, (40 * dp).toInt(), 1f))
+        val h = (44 * dp).toInt()
+        closeIcon.setOnClickListener { listener.onEmojiClose() }
+        tabs.addView(closeIcon, LayoutParams(0, h, 1f))
+        catIcons.forEachIndexed { i, kind ->
+            tabs.addView(EmojiIcon(context, kind).apply { setOnClickListener { select(i) } }, LayoutParams(0, h, 1f))
         }
+        deleteIcon.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    listener.onEmojiDelete(); postDelayed(deleteRepeat, 400)
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> removeCallbacks(deleteRepeat)
+            }
+            true
+        }
+        tabs.addView(deleteIcon, LayoutParams(0, h, 1f))
         addView(tabs)
         addView(grid, LayoutParams(-1, 0, 1f))
-
-        val bottom = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-        bottom.addView(button("ABC") { listener.onEmojiClose() }, LayoutParams(0, (52 * dp).toInt(), 1.5f))
-        bottom.addView(View(context), LayoutParams(0, 1, 7f))
-        bottom.addView(button("⌫") { listener.onEmojiDelete() }, LayoutParams(0, (52 * dp).toInt(), 1.5f))
-        addView(bottom)
 
         select(if (recents().isEmpty()) 1 else 0)
         applyTheme(theme)
     }
 
-    private fun button(label: String, onClick: () -> Unit) = TextView(context).apply {
-        text = label; textSize = 16f; gravity = Gravity.CENTER
-        setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            onClick()
-        }
-    }
-
     fun applyTheme(t: KeyboardTheme) {
         theme = t
         setBackgroundColor(t.background)
-        (getChildAt(2) as LinearLayout).let { b ->
-            (0 until b.childCount).forEach { (b.getChildAt(it) as? TextView)?.setTextColor(t.text) }
-        }
+        closeIcon.color = t.text
+        deleteIcon.color = t.text
         renderTabs()
     }
 
-    private fun renderTabs() = (0 until tabs.childCount).forEach { i ->
-        val v = tabs.getChildAt(i)
-        v.alpha = if (i == category) 1f else 0.45f
-        v.background = if (i == category) GradientDrawable().apply {
-            cornerRadius = 12 * dp; setColor(theme.keyPressed)
-        } else null
+    // Hijos de tabs: [cerrar, categorías..., borrar]
+    private fun renderTabs() = catIcons.indices.forEach { i ->
+        (tabs.getChildAt(i + 1) as EmojiIcon).color = if (i == category) theme.text else theme.hint
     }
 
     fun select(i: Int) {
