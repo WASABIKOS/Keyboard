@@ -120,6 +120,37 @@ class EmojiView(
         renderTabs()
     }
 
+    // --- Deslizar a izquierda/derecha cambia de categoría ---
+    private var downX = 0f
+    private var downY = 0f
+    private var swiped = false
+
+    override fun onInterceptTouchEvent(ev: android.view.MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> { downX = ev.x; downY = ev.y; swiped = false }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                val dx = ev.x - downX; val dy = ev.y - downY
+                if (ev.y > tabs.bottom && kotlin.math.abs(dx) > 48 * dp && kotlin.math.abs(dx) > 2 * kotlin.math.abs(dy)) {
+                    swipe(dx); return true
+                }
+            }
+        }
+        return false
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(ev: android.view.MotionEvent): Boolean = true // consume el resto del gesto
+
+    private fun swipe(dx: Float) {
+        if (swiped) return
+        swiped = true
+        val next = (category + if (dx < 0) 1 else -1).coerceIn(0, catIcons.size - 1)
+        if (next != category) {
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            select(next)
+        }
+    }
+
     private fun recents(): List<String> =
         prefs.getString("recent", "").orEmpty().split('\u0001').filter { it.isNotEmpty() }
 
