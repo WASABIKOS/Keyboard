@@ -17,15 +17,19 @@ android {
         versionName = "1.$build"
     }
 
-    // Clave fija (secretos de GitHub) para que cada APK actualice al anterior sin desinstalar
+    // Clave fija versionada en el repo (decisión del dueño) para que cada APK actualice al anterior
     val keystore = rootProject.file("release.jks")
+    val signingProps = java.util.Properties().apply {
+        rootProject.file("signing.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    val keystorePassword = signingProps.getProperty("KEYSTORE_PASSWORD")
     signingConfigs {
         create("release") {
             if (keystore.exists()) {
                 storeFile = keystore
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                storePassword = keystorePassword
                 keyAlias = "wasabi"
-                keyPassword = System.getenv("KEYSTORE_PASSWORD")
+                keyPassword = keystorePassword
             }
         }
     }
