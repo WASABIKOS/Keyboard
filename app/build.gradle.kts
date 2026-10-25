@@ -19,10 +19,8 @@ android {
 
     // Clave fija versionada en el repo (decisión del dueño) para que cada APK actualice al anterior
     val keystore = rootProject.file("release.jks")
-    val signingProps = java.util.Properties().apply {
-        rootProject.file("signing.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-    }
-    val keystorePassword = signingProps.getProperty("KEYSTORE_PASSWORD")
+    val keystorePassword = rootProject.file("signing.properties").takeIf { it.exists() }
+        ?.readLines()?.firstOrNull { it.startsWith("KEYSTORE_PASSWORD=") }?.substringAfter("=")
     signingConfigs {
         create("release") {
             if (keystore.exists()) {
