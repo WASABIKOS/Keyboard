@@ -29,11 +29,11 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     override fun onCreateInputView(): View {
         val kb = KeyboardView(this).also { it.listener = this; view = it }
-        val em = EmojiView(this, emojiListener).also { it.visibility = View.GONE; emoji = it }
+        val em = EmojiView(this, emojiListener, kb).also { it.visibility = View.GONE; emoji = it }
         // El teclado (INVISIBLE, no GONE) fija la altura; los emojis lo cubren con la misma altura
         return FrameLayout(this).apply {
             addView(kb)
-            addView(em, FrameLayout.LayoutParams(-1, -1))
+            addView(em, FrameLayout.LayoutParams(-1, -2))
         }
     }
 

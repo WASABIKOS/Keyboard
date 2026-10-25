@@ -12,7 +12,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Biblioteca de emojis dentro del propio teclado (misma altura, reemplaza las teclas). */
-class EmojiView(context: Context, private val listener: Listener) : LinearLayout(context) {
+class EmojiView(
+    context: Context,
+    private val listener: Listener,
+    private val keyboard: View,
+) : LinearLayout(context) {
+
+    // Misma altura que el teclado: sin esto MATCH_PARENT crece hasta toda la pantalla
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val h = keyboard.measuredHeight.takeIf { it > 0 } ?: (232 * resources.displayMetrics.density).toInt()
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+    }
+
 
     interface Listener {
         fun onEmoji(emoji: String)
