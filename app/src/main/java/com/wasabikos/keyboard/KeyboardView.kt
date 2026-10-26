@@ -37,7 +37,20 @@ class KeyboardView(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
 
     private val dp = resources.displayMetrics.density
-    private val rowHeight = 56 * dp
+    private var rowHeight = rowHeightDp(context) * dp
+
+    companion object {
+        const val PREF_ROW_HEIGHT = "row_height_dp"
+        const val DEFAULT_ROW_HEIGHT = 56
+        fun rowHeightDp(ctx: Context) = ctx.getSharedPreferences("keyboard", Context.MODE_PRIVATE)
+            .getInt(PREF_ROW_HEIGHT, DEFAULT_ROW_HEIGHT)
+    }
+
+    /** Relee la altura elegida en la configuración. */
+    fun reloadHeight() {
+        val h = rowHeightDp(context) * dp
+        if (h != rowHeight) { rowHeight = h; requestLayout(); layoutKeys(); invalidate() }
+    }
     private val pad = 4 * dp
     private val radius = 8 * dp
 

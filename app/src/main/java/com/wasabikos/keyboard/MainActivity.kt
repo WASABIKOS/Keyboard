@@ -55,6 +55,31 @@ class MainActivity : Activity() {
         micButton = button("3. Permitir micrófono") {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
         }
+        val prefs = getSharedPreferences("keyboard", MODE_PRIVATE)
+        val heightLabel = TextView(this).apply {
+            textSize = 18f
+            setPadding(0, (28 * dp).toInt(), 0, 0)
+        }
+        fun showHeight(v: Int) { heightLabel.text = "Alto del teclado: ${(v * 100) / KeyboardView.DEFAULT_ROW_HEIGHT}%" }
+        root.addView(heightLabel)
+        // Alto de fila entre 40 y 80 dp (56 = normal)
+        root.addView(android.widget.SeekBar(this).apply {
+            max = 40
+            progress = KeyboardView.rowHeightDp(this@MainActivity) - 40
+            showHeight(progress + 40)
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, fromUser: Boolean) {
+                    showHeight(p + 40)
+                    prefs.edit().putInt(KeyboardView.PREF_ROW_HEIGHT, p + 40).apply()
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+            })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (8 * dp).toInt() })
+        button("Restablecer alto") {
+            prefs.edit().putInt(KeyboardView.PREF_ROW_HEIGHT, KeyboardView.DEFAULT_ROW_HEIGHT).apply()
+            recreate()
+        }
         root.addView(EditText(this).apply { hint = "Prueba el teclado aquí" },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = (24 * dp).toInt() })
         setContentView(ScrollView(this).apply { addView(root) })

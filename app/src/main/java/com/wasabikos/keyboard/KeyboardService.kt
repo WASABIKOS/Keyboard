@@ -53,6 +53,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         super.onStartInputView(info, restarting)
         val v = view ?: return
         v.theme = KeyboardTheme.from(this)
+        v.reloadHeight()
         showEmoji(false)
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
         v.rows = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE)
