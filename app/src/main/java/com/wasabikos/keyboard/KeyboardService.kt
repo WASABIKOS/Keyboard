@@ -69,6 +69,17 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         updateAutoCaps()
     }
 
+    private var hasSelection = false
+    private var capsAfterUpdate = false
+
+    override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int,
+                                   candidatesStart: Int, candidatesEnd: Int) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        hasSelection = newSelStart != newSelEnd
+        // Mayúscula automática tras borrar: se evalúa cuando el editor confirma, no en el toque
+        if (capsAfterUpdate) { capsAfterUpdate = false; updateAutoCaps() }
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         view?.theme = KeyboardTheme.from(this)
@@ -100,11 +111,10 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         val v = view ?: return
         when (type) {
             KeyType.DELETE -> {
-                val selected = ic.getSelectedText(0)
-                if (!selected.isNullOrEmpty()) ic.commitText("", 1)
+                if (hasSelection) ic.commitText("", 1)
                 else {
                     // Borra un carácter visible completo (emojis compuestos, banderas)
-                    val before = ic.getTextBeforeCursor(16, 0)?.toString().orEmpty()
+                    val before = ic.getTextBeforeCursor(8, 0)?.toString().orEmpty()
                     val n = if (before.isEmpty()) 1 else {
                         val it = java.text.BreakIterator.getCharacterInstance()
                         it.setText(before)
@@ -112,7 +122,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                     }
                     ic.deleteSurroundingText(n, 0)
                 }
-                updateAutoCaps()
+                capsAfterUpdate = true
             }
             KeyType.SPACE -> {
                 if (v.listening) stopListening() else { ic.commitText(" ", 1); updateAutoCaps() }

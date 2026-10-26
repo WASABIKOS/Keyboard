@@ -254,46 +254,65 @@ class KeyboardView(context: Context) : View(context) {
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                val (key, rect) = keyAt(event.x, event.y) ?: return true
-                pressed = key; pressedRect = rect; downY = event.y
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                if (key.type == KeyType.DELETE) {
-                    listener?.onKey(KeyType.DELETE)
-                    handler.postDelayed(repeatDelete, 400)
-                } else if (key.type == KeyType.SPACE) {
-                    handler.postDelayed(longPressSpace, 400)
-                } else if (key.popup.isNotEmpty()) {
-                    handler.postDelayed(longPress, 350)
-                }
-                invalidate()
+            MotionEvent.ACTION_DOWN -> press(event, 0)
+            // Escritura rápida con dos pulgares: un dedo nuevo confirma la tecla anterior al instante
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (pressed != null) release()
+                press(event, event.actionIndex)
             }
-            // Deslizar hacia arriba desde la barra espaciadora abre los emojis
-            MotionEvent.ACTION_MOVE -> if (pressed?.type == KeyType.SPACE && !consumed) {
-                if (downY - event.y > 40 * dp) {
-                    consumed = true
-                    handler.removeCallbacks(longPressSpace)
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    listener?.onKey(KeyType.EMOJI)
+            MotionEvent.ACTION_MOVE -> {
+                val i = event.findPointerIndex(activePointer)
+                if (i < 0) return true
+                val x = event.getX(i); val y = event.getY(i)
+                // Deslizar hacia arriba desde la barra espaciadora abre los emojis
+                if (pressed?.type == KeyType.SPACE && !consumed) {
+                    if (downY - y > 40 * dp) {
+                        consumed = true
+                        handler.removeCallbacks(longPressSpace)
+                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        listener?.onKey(KeyType.EMOJI)
+                    }
+                } else popupRect?.let { pr ->
+                    val idx = ((x - pr.left) / (pr.width() / popupKeys.size)).toInt()
+                        .coerceIn(0, popupKeys.size - 1)
+                    if (idx != popupIndex) { popupIndex = idx; invalidate() }
                 }
-            } else popupRect?.let { pr ->
-                val idx = ((event.x - pr.left) / (pr.width() / popupKeys.size)).toInt()
-                    .coerceIn(0, popupKeys.size - 1)
-                if (idx != popupIndex) { popupIndex = idx; invalidate() }
             }
-            MotionEvent.ACTION_UP -> {
-                val key = pressed
-                if (popupRect != null && popupIndex >= 0) {
-                    listener?.onText(applyShift(popupKeys[popupIndex]))
-                } else if (key != null && key.type != KeyType.DELETE && !consumed) {
-                    if (key.type == KeyType.CHAR) listener?.onText(displayLabel(key))
-                    else listener?.onKey(key.type)
-                }
-                reset()
-            }
+            MotionEvent.ACTION_POINTER_UP ->
+                if (event.getPointerId(event.actionIndex) == activePointer) release()
+            MotionEvent.ACTION_UP -> if (pressed != null) release() else reset()
             MotionEvent.ACTION_CANCEL -> reset()
         }
         return true
+    }
+
+    private var activePointer = -1
+
+    private fun press(event: MotionEvent, index: Int) {
+        val (key, rect) = keyAt(event.getX(index), event.getY(index)) ?: return
+        activePointer = event.getPointerId(index)
+        pressed = key; pressedRect = rect; downY = event.getY(index)
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        when {
+            key.type == KeyType.DELETE -> {
+                listener?.onKey(KeyType.DELETE)
+                handler.postDelayed(repeatDelete, 400)
+            }
+            key.type == KeyType.SPACE -> handler.postDelayed(longPressSpace, 400)
+            key.popup.isNotEmpty() -> handler.postDelayed(longPress, 350)
+        }
+        invalidate()
+    }
+
+    private fun release() {
+        val key = pressed
+        if (popupRect != null && popupIndex >= 0) {
+            listener?.onText(applyShift(popupKeys[popupIndex]))
+        } else if (key != null && key.type != KeyType.DELETE && !consumed) {
+            if (key.type == KeyType.CHAR) listener?.onText(displayLabel(key))
+            else listener?.onKey(key.type)
+        }
+        reset()
     }
 
     private fun reset() {
@@ -301,7 +320,7 @@ class KeyboardView(context: Context) : View(context) {
         handler.removeCallbacks(repeatDelete)
         handler.removeCallbacks(longPressSpace)
         consumed = false
-        pressed = null; pressedRect = null
+        pressed = null; pressedRect = null; activePointer = -1
         popupRect = null; popupKeys = emptyList(); popupIndex = -1
         invalidate()
     }
