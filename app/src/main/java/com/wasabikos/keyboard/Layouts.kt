@@ -14,9 +14,9 @@ data class Key(
 object Layouts {
     private fun c(label: String, vararg popup: String) = Key(label, popup = popup.toList())
 
-    private fun bottomRow(switchKey: Key) = listOf(
+    private fun bottomRow(switchKey: Key, extra: Key = Key(",", popup = listOf("…", ";", ":"))) = listOf(
         switchKey,
-        Key(",", popup = listOf("…", ";", ":")),
+        extra,
         Key("", KeyType.SPACE, weight = 5f),
         Key(".", popup = listOf("!?", "!", "?", "¡", "¿")),
         Key("", KeyType.ENTER, weight = 1.5f),
@@ -55,5 +55,21 @@ object Layouts {
             listOf("%", "©", "®", "™", "✓", "[", "]").map { c(it) } +
             Key("", KeyType.DELETE, weight = 1.5f),
         bottomRow(Key("ABC", KeyType.LETTERS, weight = 1.5f)),
+    )
+
+    /** Letras con `@` en lugar de la coma, para campos de email. */
+    val email: List<List<Key>> = letters.dropLast(1) +
+        listOf(bottomRow(Key("?123", KeyType.SYMBOLS, weight = 1.5f), Key("@", popup = listOf(",", "_", "-"))))
+
+    /** Letras con `/` en lugar de la coma, para URLs. */
+    val url: List<List<Key>> = letters.dropLast(1) +
+        listOf(bottomRow(Key("?123", KeyType.SYMBOLS, weight = 1.5f), Key("/", popup = listOf(",", ".com", ":", "-"))))
+
+    /** Teclado numérico 3×4 para campos de número y teléfono. */
+    val numpad: List<List<Key>> = listOf(
+        listOf(c("1"), c("2"), c("3"), c("-")),
+        listOf(c("4"), c("5"), c("6"), c("+", "*", "#")),
+        listOf(c("7"), c("8"), c("9"), Key("", KeyType.DELETE)),
+        listOf(Key("?123", KeyType.SYMBOLS), c("0", "(", ")"), c(".", ","), Key("", KeyType.ENTER)),
     )
 }

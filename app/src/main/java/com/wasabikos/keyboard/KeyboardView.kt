@@ -18,6 +18,8 @@ class KeyboardView(context: Context) : View(context) {
     interface Listener {
         fun onText(text: String)
         fun onKey(type: KeyType)
+        fun onCursor(delta: Int)
+        fun onDeleteWord()
     }
 
     enum class Shift { OFF, ON, LOCKED }
@@ -83,12 +85,20 @@ class KeyboardView(context: Context) : View(context) {
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         listener?.onKey(KeyType.MIC)
     }
+    // Tras ~1 s de repetición borra palabras enteras
+    private var deleteRepeats = 0
     private val repeatDelete = object : Runnable {
         override fun run() {
-            listener?.onKey(KeyType.DELETE)
-            handler.postDelayed(this, 50)
+            deleteRepeats++
+            if (deleteRepeats > 20) listener?.onDeleteWord() else listener?.onKey(KeyType.DELETE)
+            handler.postDelayed(this, if (deleteRepeats > 20) 150L else 50L)
         }
     }
+    /** Desactiva el dictado con pulsación larga (p. ej. en contraseñas). */
+    var voiceEnabled = true
+    private var downX = 0f
+    private var cursorX = 0f
+    private var sliding = false
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
@@ -265,8 +275,21 @@ class KeyboardView(context: Context) : View(context) {
                 if (i < 0) return true
                 val x = event.getX(i); val y = event.getY(i)
                 // Deslizar hacia arriba desde la barra espaciadora abre los emojis
-                if (pressed?.type == KeyType.SPACE && !consumed) {
-                    if (downY - y > 40 * dp) {
+                if (pressed?.type == KeyType.SPACE && (!consumed || sliding)) {
+                    // Deslizar en horizontal sobre la barra espaciadora mueve el cursor
+                    val step = 12 * dp
+                    if (!sliding && kotlin.math.abs(x - downX) > 2 * step) {
+                        consumed = true; sliding = true; cursorX = x
+                        handler.removeCallbacks(longPressSpace)
+                    }
+                    if (sliding) {
+                        val n = ((x - cursorX) / step).toInt()
+                        if (n != 0) {
+                            cursorX += n * step
+                            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            listener?.onCursor(n)
+                        }
+                    } else if (downY - y > 40 * dp) {
                         consumed = true
                         handler.removeCallbacks(longPressSpace)
                         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -291,14 +314,14 @@ class KeyboardView(context: Context) : View(context) {
     private fun press(event: MotionEvent, index: Int) {
         val (key, rect) = keyAt(event.getX(index), event.getY(index)) ?: return
         activePointer = event.getPointerId(index)
-        pressed = key; pressedRect = rect; downY = event.getY(index)
+        pressed = key; pressedRect = rect; downY = event.getY(index); downX = event.getX(index)
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         when {
             key.type == KeyType.DELETE -> {
                 listener?.onKey(KeyType.DELETE)
                 handler.postDelayed(repeatDelete, 400)
             }
-            key.type == KeyType.SPACE -> handler.postDelayed(longPressSpace, 400)
+            key.type == KeyType.SPACE -> if (voiceEnabled) handler.postDelayed(longPressSpace, 400)
             key.popup.isNotEmpty() -> handler.postDelayed(longPress, 350)
         }
         invalidate()
@@ -319,7 +342,7 @@ class KeyboardView(context: Context) : View(context) {
         handler.removeCallbacks(longPress)
         handler.removeCallbacks(repeatDelete)
         handler.removeCallbacks(longPressSpace)
-        consumed = false
+        consumed = false; sliding = false; deleteRepeats = 0
         pressed = null; pressedRect = null; activePointer = -1
         popupRect = null; popupKeys = emptyList(); popupIndex = -1
         invalidate()

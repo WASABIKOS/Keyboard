@@ -56,8 +56,19 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         v.reloadHeight()
         showEmoji(false)
         val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        val variation = info.inputType and InputType.TYPE_MASK_VARIATION
+        textLayout = when {
+            cls != InputType.TYPE_CLASS_TEXT -> Layouts.letters
+            variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS -> Layouts.email
+            variation == InputType.TYPE_TEXT_VARIATION_URI -> Layouts.url
+            else -> Layouts.letters
+        }
         v.rows = if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE)
-            Layouts.symbols else Layouts.letters
+            Layouts.numpad else textLayout
+        // En contraseñas no se dicta: el audio saldría del dispositivo
+        privateField = isPassword(info) || info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0
+        v.voiceEnabled = !isPassword(info)
         v.enterLabel = when (info.imeOptions and EditorInfo.IME_MASK_ACTION) {
             EditorInfo.IME_ACTION_GO -> "Ir"
             EditorInfo.IME_ACTION_SEARCH -> "Buscar"
@@ -67,6 +78,22 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             else -> null
         }
         updateAutoCaps()
+    }
+
+    private var textLayout = Layouts.letters
+    private var privateField = false
+    private var lastSpaceTime = 0L
+
+    private fun isPassword(info: EditorInfo): Boolean {
+        val cls = info.inputType and InputType.TYPE_MASK_CLASS
+        val variation = info.inputType and InputType.TYPE_MASK_VARIATION
+        return when (cls) {
+            InputType.TYPE_CLASS_TEXT -> variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            InputType.TYPE_CLASS_NUMBER -> variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            else -> false
+        }
     }
 
     private var hasSelection = false
@@ -125,7 +152,20 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                 capsAfterUpdate = true
             }
             KeyType.SPACE -> {
-                if (v.listening) stopListening() else { ic.commitText(" ", 1); updateAutoCaps() }
+                if (v.listening) { stopListening(); return }
+                // Doble espacio rápido tras una palabra → ". "
+                val now = System.currentTimeMillis()
+                val before = ic.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+                if (!privateField && now - lastSpaceTime < 400 && before.length == 2 &&
+                    before[1] == ' ' && before[0].isLetterOrDigit()) {
+                    ic.deleteSurroundingText(1, 0)
+                    ic.commitText(". ", 1)
+                    lastSpaceTime = 0L
+                } else {
+                    ic.commitText(" ", 1)
+                    lastSpaceTime = now
+                }
+                updateAutoCaps()
             }
             KeyType.ENTER -> {
                 val info = currentInputEditorInfo
@@ -150,12 +190,34 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
             }
             KeyType.SYMBOLS -> { v.shift = KeyboardView.Shift.OFF; v.rows = Layouts.symbols }
             KeyType.MORE_SYMBOLS -> v.rows = Layouts.moreSymbols
-            KeyType.LETTERS -> { v.rows = Layouts.letters; updateAutoCaps() }
+            KeyType.LETTERS -> { v.rows = textLayout; updateAutoCaps() }
             KeyType.GLOBE -> switchKeyboard()
-            KeyType.MIC -> toggleListening()
+            KeyType.MIC -> if (v.voiceEnabled) toggleListening()
+                else Toast.makeText(this, "Dictado desactivado en contraseñas", Toast.LENGTH_SHORT).show()
             KeyType.EMOJI -> showEmoji(true)
             KeyType.CHAR -> Unit
         }
+    }
+
+    override fun onCursor(delta: Int) {
+        val ic = currentInputConnection ?: return
+        val code = if (delta < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+        repeat(kotlin.math.abs(delta)) {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+        }
+    }
+
+    /** Borra la palabra anterior junto con los espacios que la siguen. */
+    override fun onDeleteWord() {
+        val ic = currentInputConnection ?: return
+        if (hasSelection) { ic.commitText("", 1); return }
+        val before = ic.getTextBeforeCursor(64, 0)?.toString().orEmpty()
+        if (before.isEmpty()) return
+        val trimmed = before.trimEnd()
+        val start = trimmed.indexOfLast { it.isWhitespace() } + 1
+        ic.deleteSurroundingText((before.length - start).coerceAtLeast(1), 0)
+        capsAfterUpdate = true
     }
 
     private fun switchKeyboard() {
@@ -168,7 +230,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private fun updateAutoCaps() {
         val v = view ?: return
-        if (v.shift == KeyboardView.Shift.LOCKED || v.rows !== Layouts.letters) return
+        if (v.shift == KeyboardView.Shift.LOCKED || v.rows !== textLayout) return
         val info = currentInputEditorInfo ?: return
         val ic = currentInputConnection ?: return
         val caps = info.inputType != InputType.TYPE_NULL && ic.getCursorCapsMode(info.inputType) != 0
@@ -237,12 +299,28 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private fun firstResult(bundle: Bundle?): String? =
         bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }
 
+    private val spokenPunctuation = listOf(
+        "signo de interrogación" to "?", "signo de exclamación" to "!",
+        "nueva línea" to "\n", "punto y coma" to ";", "dos puntos" to ":",
+        "puntos suspensivos" to "…", "punto y aparte" to ".\n", "coma" to ",", "punto" to ".",
+    )
+
+    /** Convierte la puntuación dictada ("coma", "punto"…) en signos, sin espacio previo. */
+    private fun punctuate(text: String): String {
+        var out = text
+        for ((word, sign) in spokenPunctuation) {
+            out = out.replace(Regex("\\s*\\b$word\\b", RegexOption.IGNORE_CASE), sign)
+        }
+        // Mayúscula tras fin de frase dentro del propio dictado
+        return out.replace(Regex("([.!?\n]\\s*)(\\p{Ll})")) { it.groupValues[1] + it.groupValues[2].uppercase() }
+    }
+
     /** Añade espacio inicial y mayúscula según el texto que precede al cursor. */
     private fun format(text: String): String {
         val before = currentInputConnection?.getTextBeforeCursor(2, 0)?.toString().orEmpty()
         val needsSpace = before.isNotEmpty() && !before.last().isWhitespace()
         val sentenceStart = before.isBlank() || before.trimEnd().lastOrNull() in listOf('.', '!', '?', '\n')
-        val body = if (sentenceStart) text.replaceFirstChar { it.titlecase(Locale.getDefault()) } else text
+        val body = if (sentenceStart) punctuate(text).replaceFirstChar { it.titlecase(Locale.getDefault()) } else punctuate(text)
         return (if (needsSpace) " " else "") + body
     }
 
