@@ -233,7 +233,7 @@ class KeyboardView(context: Context) : View(context) {
         val maxHeight = 22 * dp
         val profile = floatArrayOf(0.32f, 0.58f, 0.82f, 1f, 0.82f, 0.58f, 0.32f)
         val energy = 0.18f + voiceLevel * 0.82f
-        fill.color = theme.accent
+        fill.color = theme.text
         profile.forEachIndexed { index, weight ->
             val height = (maxHeight * weight * energy).coerceAtLeast(3 * dp)
             val x = cx + (index - profile.lastIndex / 2f) * (barWidth + gap)
