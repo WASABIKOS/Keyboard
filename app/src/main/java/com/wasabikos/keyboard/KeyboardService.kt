@@ -279,7 +279,10 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onRmsChanged(rmsdB: Float) {
+            // SpeechRecognizer suele informar niveles entre -2 dB (silencio) y ~10 dB.
+            view?.voiceLevel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+        }
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onEvent(eventType: Int, params: Bundle?) {}

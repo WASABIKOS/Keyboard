@@ -30,7 +30,13 @@ class KeyboardView(context: Context) : View(context) {
     var shift = Shift.OFF
         set(value) { field = value; invalidate() }
     var listening = false
-        set(value) { field = value; invalidate() }
+        set(value) {
+            field = value
+            if (!value) voiceLevel = 0f
+            invalidate()
+        }
+    var voiceLevel = 0f
+        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     var spaceLabel = ""
         set(value) { field = value; invalidate() }
     var enterLabel: String? = null
@@ -53,6 +59,11 @@ class KeyboardView(context: Context) : View(context) {
     }
     private val pad = 4 * dp
     private val radius = 8 * dp
+
+    init {
+        // El feedback de dictado es visual; evita el sonido de tecla propio de Android.
+        isSoundEffectsEnabled = false
+    }
 
     private val bounds = mutableListOf<Pair<Key, RectF>>()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -127,7 +138,7 @@ class KeyboardView(context: Context) : View(context) {
             }
             bg?.let { fill.color = it; canvas.drawRoundRect(r, radius, radius, fill) }
 
-            val fg = if (key.type == KeyType.MIC && listening) theme.onAccent else theme.text
+            val fg = theme.text
             textPaint.color = fg
             stroke.color = fg
             when (key.type) {
@@ -135,7 +146,7 @@ class KeyboardView(context: Context) : View(context) {
                 KeyType.DELETE -> drawDelete(canvas, r)
                 KeyType.ENTER -> drawEnter(canvas, r)
                 KeyType.GLOBE -> drawGlobe(canvas, r)
-                KeyType.MIC -> drawMic(canvas, r)
+                KeyType.MIC -> if (listening) drawVoiceWave(canvas, r) else drawMic(canvas, r)
                 KeyType.EMOJI -> Unit
                 KeyType.SPACE -> {
                     textPaint.color = theme.hint
@@ -209,6 +220,27 @@ class KeyboardView(context: Context) : View(context) {
         canvas.drawRoundRect(RectF(cx - s, cy - 2 * s, cx + s, cy + s / 2), s, s, fill)
         canvas.drawArc(RectF(cx - 1.8f * s, cy - 1.5f * s, cx + 1.8f * s, cy + 1.6f * s), 0f, 180f, false, stroke)
         canvas.drawLine(cx, cy + 1.6f * s, cx, cy + 2.4f * s, stroke)
+    }
+
+    /** Onda compacta que responde al nivel RMS enviado por SpeechRecognizer. */
+    private fun drawVoiceWave(canvas: Canvas, r: RectF) {
+        val cx = r.centerX()
+        val cy = r.centerY()
+        val barWidth = 3 * dp
+        val gap = 2.5f * dp
+        val maxHeight = 22 * dp
+        val profile = floatArrayOf(0.32f, 0.58f, 0.82f, 1f, 0.82f, 0.58f, 0.32f)
+        val energy = 0.18f + voiceLevel * 0.82f
+        fill.color = theme.accent
+        profile.forEachIndexed { index, weight ->
+            val height = (maxHeight * weight * energy).coerceAtLeast(3 * dp)
+            val x = cx + (index - profile.lastIndex / 2f) * (barWidth + gap)
+            canvas.drawRoundRect(
+                x - barWidth / 2, cy - height / 2,
+                x + barWidth / 2, cy + height / 2,
+                barWidth / 2, barWidth / 2, fill,
+            )
+        }
     }
 
     private fun drawPopup(canvas: Canvas) {
