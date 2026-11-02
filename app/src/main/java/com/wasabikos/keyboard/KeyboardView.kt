@@ -149,8 +149,10 @@ class KeyboardView(context: Context) : View(context) {
                 KeyType.MIC -> if (listening) drawVoiceWave(canvas, r) else drawMic(canvas, r)
                 KeyType.EMOJI -> Unit
                 KeyType.SPACE -> {
-                    textPaint.color = theme.hint
-                    drawText(canvas, spaceLabel, r, 13)
+                    if (listening) drawVoiceWave(canvas, r) else {
+                        textPaint.color = theme.hint
+                        drawText(canvas, spaceLabel, r, 13)
+                    }
                 }
                 KeyType.SYMBOLS, KeyType.LETTERS, KeyType.MORE_SYMBOLS -> drawText(canvas, key.label, r, 15)
                 KeyType.CHAR -> {
