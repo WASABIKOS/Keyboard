@@ -9,9 +9,12 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.abs
+import kotlin.math.sin
 
 class KeyboardView(context: Context) : View(context) {
 
@@ -224,19 +227,22 @@ class KeyboardView(context: Context) : View(context) {
         canvas.drawLine(cx, cy + 1.6f * s, cx, cy + 2.4f * s, stroke)
     }
 
-    /** Onda compacta que responde al nivel RMS enviado por SpeechRecognizer. */
+    /** Ecualizador ancho que se anima con el nivel RMS enviado por SpeechRecognizer. */
     private fun drawVoiceWave(canvas: Canvas, r: RectF) {
-        val cx = r.centerX()
         val cy = r.centerY()
-        val barWidth = 3 * dp
-        val gap = 2.5f * dp
-        val maxHeight = 22 * dp
-        val profile = floatArrayOf(0.32f, 0.58f, 0.82f, 1f, 0.82f, 0.58f, 0.32f)
-        val energy = 0.18f + voiceLevel * 0.82f
+        val barCount = 19
+        val waveWidth = r.width() * 0.86f
+        val spacing = waveWidth / (barCount - 1)
+        val barWidth = minOf(3 * dp, spacing * 0.48f)
+        val maxHeight = 24 * dp
+        val phase = SystemClock.uptimeMillis() / 140f
+        val energy = 0.12f + voiceLevel * 0.88f
+        val firstX = r.centerX() - waveWidth / 2
         fill.color = theme.text
-        profile.forEachIndexed { index, weight ->
-            val height = (maxHeight * weight * energy).coerceAtLeast(3 * dp)
-            val x = cx + (index - profile.lastIndex / 2f) * (barWidth + gap)
+        repeat(barCount) { index ->
+            val profile = 0.22f + 0.78f * abs(sin(index * 0.78f + phase))
+            val height = (maxHeight * profile * energy).coerceAtLeast(2 * dp)
+            val x = firstX + index * spacing
             canvas.drawRoundRect(
                 x - barWidth / 2, cy - height / 2,
                 x + barWidth / 2, cy + height / 2,
