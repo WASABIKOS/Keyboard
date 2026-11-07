@@ -7,6 +7,8 @@ import android.content.res.Configuration
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -91,6 +93,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(restartRecognition)
         recognizer?.destroy()
         recognizer = null
         super.onDestroy()
@@ -177,6 +180,19 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
 
     // --- Dictado por voz ---
 
+    private companion object {
+        /** Descanso entre el final de una frase y el re-escuchar, para no cortar el pico de audio. */
+        const val RESTART_DELAY_MS = 320L
+        /** Fallos seguidos sin texto (silencio, ruido) antes de dejar de escuchar. */
+        const val MAX_SILENT_RUNS = 3
+    }
+
+    private val main = Handler(Looper.getMainLooper())
+    private var silentRuns = 0
+    private val restartRecognition = Runnable {
+        if (view?.listening == true) startRecognition()
+    }
+
     private fun toggleListening() {
         if (view?.listening == true) { stopListening(); return }
 
@@ -187,13 +203,19 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                 .putExtra(MainActivity.EXTRA_REQUEST_MIC, true))
             return
         }
-        val sr = recognizer ?: createRecognizer()?.also {
-            it.setRecognitionListener(recognitionListener)
-            recognizer = it
-        } ?: run {
-            Toast.makeText(this, "No hay servicio de voz (STT). Instala o activa Google Speech Services", Toast.LENGTH_LONG).show()
-            return
+        if (recognizer == null) {
+            recognizer = createRecognizer()?.also { it.setRecognitionListener(recognitionListener) } ?: run {
+                Toast.makeText(this, "No hay servicio de voz (STT). Instala o activa Google Speech Services", Toast.LENGTH_LONG).show()
+                return
+            }
         }
+        silentRuns = 0
+        startRecognition()
+    }
+
+    /** Lanza (o relanza) el reconocedor manteniendo el estado de escucha y la onda. */
+    private fun startRecognition() {
+        val sr = recognizer ?: return
         val lang = spanishTag()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -206,6 +228,13 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         sr.startListening(intent)
         view?.listening = true
         view?.spaceLabel = "Escuchando…"
+    }
+
+    /** Continúa escuchando tras una frase: dictado manos libres hasta que el usuario pare. */
+    private fun scheduleRestart(delayMs: Long = RESTART_DELAY_MS) {
+        if (view?.listening != true) return
+        main.removeCallbacks(restartRecognition)
+        main.postDelayed(restartRecognition, delayMs)
     }
 
     /** Detecta el motor STT: el del sistema y, si no hay, el reconocedor local (Android 12+). */
@@ -223,13 +252,18 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         return if (l.language == "es" && l.country.isNotEmpty()) l.toLanguageTag() else "es-US"
     }
 
+    /** Parada explícita del usuario: no se reprograma ninguna escucha. */
     private fun stopListening() {
+        main.removeCallbacks(restartRecognition)
+        silentRuns = 0
         recognizer?.cancel()
         currentInputConnection?.finishComposingText()
         onListeningEnded()
     }
 
     private fun onListeningEnded() {
+        main.removeCallbacks(restartRecognition)
+        silentRuns = 0
         view?.listening = false
         view?.spaceLabel = ""
     }
@@ -261,11 +295,30 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
                     ic.commitText(format(text), 1)
                 } else ic.finishComposingText()
             }
-            onListeningEnded()
+            if (view?.listening == true) {
+                // Manos libres: continúa escuchando la siguiente frase.
+                if (text == null) silentRuns++ else silentRuns = 0
+                if (silentRuns >= MAX_SILENT_RUNS) {
+                    stopListening()
+                    Toast.makeText(this@KeyboardService, "Dictado detenido por falta de voz", Toast.LENGTH_SHORT).show()
+                } else scheduleRestart()
+            } else onListeningEnded()
         }
 
         override fun onError(error: Int) {
             currentInputConnection?.finishComposingText()
+            val transient = error == SpeechRecognizer.ERROR_NO_MATCH ||
+                error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
+            if (view?.listening == true && transient) {
+                // Silencio o motor ocupado: reintenta sin molestar, con un límite.
+                silentRuns++
+                if (silentRuns >= MAX_SILENT_RUNS) {
+                    stopListening()
+                    Toast.makeText(this@KeyboardService, "Dictado detenido: no se detectó voz", Toast.LENGTH_SHORT).show()
+                } else scheduleRestart(600)
+                return
+            }
             onListeningEnded()
             val msg = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No se entendió, intenta de nuevo"

@@ -14,6 +14,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.sin
 
 class KeyboardView(context: Context) : View(context) {
@@ -39,7 +40,14 @@ class KeyboardView(context: Context) : View(context) {
             invalidate()
         }
     var voiceLevel = 0f
-        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+            if (listening) postInvalidateOnAnimation() else invalidate()
+        }
+
+    /** Nivel suavizado que dibuja la onda: sube rápido y baja despacio, sin parpadear. */
+    private var smoothedLevel = 0f
+    private var lastFrameMs = 0L
     var spaceLabel = ""
         set(value) { field = value; invalidate() }
     var enterLabel: String? = null
@@ -133,6 +141,7 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(theme.background)
+        updateVoiceLevel()
         for ((key, r) in bounds) {
             // Estilo AMOLED plano: sin fondo de tecla salvo al pulsar o dictando
             val bg = when {
@@ -236,9 +245,9 @@ class KeyboardView(context: Context) : View(context) {
         val barWidth = minOf(3 * dp, spacing * 0.48f)
         val maxHeight = 24 * dp
         val phase = SystemClock.uptimeMillis() / 140f
-        val energy = 0.12f + voiceLevel * 0.88f
+        val energy = 0.12f + smoothedLevel * 0.88f
         val firstX = r.centerX() - waveWidth / 2
-        fill.color = theme.text
+        fill.color = theme.accent
         repeat(barCount) { index ->
             val profile = 0.22f + 0.78f * abs(sin(index * 0.78f + phase))
             val height = (maxHeight * profile * energy).coerceAtLeast(2 * dp)
@@ -249,6 +258,25 @@ class KeyboardView(context: Context) : View(context) {
                 barWidth / 2, barWidth / 2, fill,
             )
         }
+    }
+
+    /**
+     * Suaviza el nivel de voz hacia el valor objetivo y mantiene la animación a 60 fps
+     * mientras se escucha (la onda se mueve aunque el RMS no cambie).
+     */
+    private fun updateVoiceLevel() {
+        if (!listening) {
+            smoothedLevel = 0f
+            lastFrameMs = 0L
+            return
+        }
+        val now = SystemClock.uptimeMillis()
+        val dt = if (lastFrameMs == 0L) 1f / 60f else ((now - lastFrameMs) / 1000f).coerceIn(0.001f, 0.1f)
+        lastFrameMs = now
+        // Atacar rápido y soltar despacio: respira en vez de vibrar con cada callback de RMS.
+        val rate = if (voiceLevel > smoothedLevel) 22f else 5f
+        smoothedLevel += (voiceLevel - smoothedLevel) * (1f - exp(-rate * dt))
+        postInvalidateOnAnimation()
     }
 
     private fun drawPopup(canvas: Canvas) {
