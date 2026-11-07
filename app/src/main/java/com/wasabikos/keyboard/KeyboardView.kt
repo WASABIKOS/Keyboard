@@ -247,7 +247,9 @@ class KeyboardView(context: Context) : View(context) {
         val phase = SystemClock.uptimeMillis() / 140f
         val energy = 0.12f + smoothedLevel * 0.88f
         val firstX = r.centerX() - waveWidth / 2
-        fill.color = theme.accent
+        // Blanco en tema oscuro (texto = blanco); en tema claro usa el color de texto
+        // para que la onda no desaparezca sobre el fondo claro.
+        fill.color = theme.text
         repeat(barCount) { index ->
             val profile = 0.22f + 0.78f * abs(sin(index * 0.78f + phase))
             val height = (maxHeight * profile * energy).coerceAtLeast(2 * dp)
